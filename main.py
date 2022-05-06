@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from sympy.solvers import solve
 from sympy import Symbol
 
-
+dt = 0.1
 G = 6.67*10**(-11)
 c = 3*10**8
 xc = 600
@@ -46,19 +46,31 @@ class dot:
         self.m = 1
         self.x = [-30, -20, -10]
         self.y = [3, 2, 5]
+        self.seg = []
         #self.coord = [vec(-30,3), vec(-20,2), vec(-10,5)]
 
+def binSearch(numDot1, numDot2, t):
+    delt=t
+    while c*delt != l:
+        l = math.sqrt((dots[numDot1].x[t]-dots[numDot2].x[t-delt])**2+(dots[numDot1].y[t]-numDot2.seg[0](t-delt)**2))
+        if c*delt > l:
+            delt -= delt / 2
+        elif c*delt < l:
+            delt += delt / 2
+    return delt
 
 
-def VerletInt(numDot,t):
-    h = 1
-    vx_t = (dots[numDot].x[t+h] - dots[numDot].x[t-h])/2*h
-    vy_t = (dots[numDot].y[t+h] - dots[numDot].y[t-h])/2*h
-    return [vx_t,vy_t]
+def acc(n1,n2,t):
+    t0 = binSearch(n1,n2,t)
+    a_x = (G * dots[n2].m * (dots[n2].x[t0] - dots[n1].x[t]))/(abs(dots[n2].x[t0] - dots[n1].x[t])**3)
+    a_y = (G * dots[n2].m * (dots[n2].y[t0] - dots[n1].y[t]))/(abs(dots[n2].y[t0] - dots[n1].y[t])**3)
+    return [a_x,a_y]
 
-for a in range(n):
-    dot_new = dot()
-    dots.append(dot_new)
+
+def VerletInt(numDot,t): #xn+1 = 2xn - xn-1 +an*dt^2
+    vx_t1 = 2*dots[numDot].x[t] - dots[numDot].x[t-1] + acc(numDot,n)[0]*dt**2
+    vy_t1 = 2*dots[numDot].y[t] - dots[numDot].y[t-1] + acc(numDot,n)[1]*dt**2
+    return [vx_t1,vy_t1]
 
 #Гравитационная сила для двух тел
 def AbsForce(d1,d2,t1,t2):
@@ -73,9 +85,11 @@ def dist(d1,t1,d2,t2):
     return distance
 #Сплайны для сегмента
 def s(numDot):
-    x_s = [dots[numDot].x[0],dots[numDot].x[1],dots[numDot].x[2]]
+    dotNum = 3
+    x_s = [dots[numDot].x[dotNum-3],dots[numDot].x[dotNum-2],dots[numDot].x[dotNum-1]]
     y_s = [dots[numDot].y[0],dots[numDot].y[1],dots[numDot].y[2]]
     tck = CubicSpline(x_s,y_s)
+
     #print(tck.c)
     return tck
 
@@ -87,16 +101,12 @@ def ds(numDot,arg,dx):
 #двоичный поиск
 #гравитационные силы
 
-
-def binSerch(numDot1, numDot2, t):
-
-    t0 = math.sqrt((dots[numDot1].x[t])**2+(dots[numDot1].y[t])**2)/c
-    return t0
-
-
-xs = [0.1  * i for i in  range (-1000,500)]
+xs = [dt  * i for i in  range (-1000,500)]
 #ys = [f(dots[0].x, dots[0].y, t) for t in xs
-
+for a in range(n):
+    dot_new = dot()
+    dots.append(dot_new)
+    dots[a].seg.append(s(a))
 
 for i in xs:
     for j in range(n):
@@ -114,7 +124,7 @@ fig, ax = plt.subplots()
 ax.plot(dots[n-1].x, dots[n-1].y, 'o', label='data')
 ax.plot(xs, s(n-1)(xs))
 ax.plot(xs, ds(n-1,xs,1))
-#plt.show()
+plt.show()
 #print(dots[n-1].x)
 #print(dots[n-1].y)
 #print("end")
