@@ -7,13 +7,12 @@ import matplotlib.pyplot as plt
 from sympy.solvers import solve
 from sympy import Symbol
 
-dt = 0.05
-G = 6.67*10**(-3)
-c = 3*10**4
+dt = 0.1
+G = 6.67*10**(-11)
+c = 3*10**2
 xc = 600
 yc = 300
 n = 3
-g = 9.8
 dots = []
 t = 0
 
@@ -43,8 +42,8 @@ class vec:
 class dot:
     def __init__(self,x,y):
         self.ball = layer.create_oval( 3, yc - 6, 15, yc + 6, fill='blue', width=0)
-        self.m = 1
-        self.time = [-3*dt, -2*dt, -dt, 0]
+        self.m = 100
+        self.time = [0, dt, 2*dt, 3*dt]
         self.x = x
         self.y = y
         self.seg_x = []
@@ -54,106 +53,99 @@ class dot:
 def binSearch(numDot1, numDot2, t):
     delt=t
     l = -1
-    while round(c*delt) != round(l):
-
-        l = math.sqrt((dots[numDot1].x[t]-sx(numDot2)(t-delt))**2+(dots[numDot1].y[t]-sy(numDot2)(t-delt)**2))
+    i = int(t/dt)
+    while round(c*delt,2) != round(l,2):
+        b =  int((t-delt)/dt)
+        sgx = dots[numDot2].seg_x[b](t-delt)
+        sgy = dots[numDot2].seg_y[b](t-delt)
+        x02=(dots[numDot1].x[i]- sgx)**2
+        y02=(dots[numDot1].y[i]- sgy)**2
+        l = math.sqrt(x02 + y02)
         if c*delt > l:
             delt -= delt / 2
         elif c*delt < l:
             delt += delt / 2
-        print('c*dt ',delt*c)
-        print('l ',l)
+       # print('c*dt ',delt*c)
+       #print('l ',l)
     return delt
 
 
 def acc(n1,t):
     a_x = 0
     a_y = 0
+    j = int(t/dt)
     for i in range(n):
         if i != n1:
-            t0 = binSearch(n1,i,t)
-            print(t0)
-            a_x += (G * dots[i].m * (sx(i)(t0) - dots[n1].x[t]))/\
-                   (math.sqrt((sx(i)(t0) - dots[n1].x[t])**2+(sy(i)(sx(i)(t0)) - dots[n1].y[t])**2)**3)
-            a_y += (G * dots[i].m * (sy(i)(sx(i)(t0)) - dots[n1].y[t]))/\
-                   (math.sqrt((sx(i)(t0) - dots[n1].x[t])**2+(sy(i)(sx(i)(t0)) - dots[n1].y[t])**2)**3)
-    return [a_x,a_y]
-print(acc(1,0))
+            t0 = t - binSearch(n1,i,t)
+            b = int(t0/dt)
+            #print(t0)
+            r3 = (math.sqrt((dots[i].seg_x[b](t0) - dots[n1].x[j])**2+(dots[i].seg_y[b](t0) - dots[n1].y[j])**2)**3)
+            a_x += (dots[i].m * (dots[i].seg_x[b](t0) - dots[n1].x[j]))/r3
+            a_y += (dots[i].m * (dots[i].seg_y[b](t0) - dots[n1].y[j]))/r3
+
+    return G * a_x,G * a_y
+
 
 def VerletInt(numDot,t): #xn+1 = 2xn - xn-1 +an*dt^2
-    vx_t1 = 2*dots[numDot].x[t] - dots[numDot].x[t-1] + acc(numDot,t)[0]*dt**2
-    vy_t1 = 2*dots[numDot].y[t] - dots[numDot].y[t-1] + acc(numDot,t)[1]*dt**2
-    return [vx_t1,vy_t1]
+    i = int(t/dt)
+    Wx,Wy = acc(numDot,t)
+    x_t1 = 2*dots[numDot].x[i] - dots[numDot].x[i-1] + Wx*dt**2
+    y_t1 = 2*dots[numDot].y[i] - dots[numDot].y[i-1] + Wy*dt**2
+    return x_t1,y_t1
 
-#Гравитационная сила для двух тел
-def AbsForce(d1,d2,t1,t2):
-    return G*(dots[d1].m*dots[d2].m/dist(d1,t1,d2,t2)**2)
-
-#Расстояние между двумя точками
-def dist(d1,t1,d2,t2):
-    distance = math.sqrt(
-         (dots[d1].x[t1] - dots[d2].x[t2])**2+
-         (dots[d1].y[t1] - dots[d2].y[t2])**2
-    )
-    return distance
 #Сплайны для сегмента
-def sx(numDot):
-    dotNum = 4
-    t_s = dots[numDot].time
+def sx(numDot,a):
+    dotNum = max(a,4)
+    t_s = dots[numDot].time[-4:]
+    #print(t_s)
     x_s = [dots[numDot].x[dotNum-4],dots[numDot].x[dotNum-3],dots[numDot].x[dotNum-2],dots[numDot].x[dotNum-1]]
     x_tck = CubicSpline(t_s,x_s)
     #print(x_tck(0))
     return x_tck
-def sy(numDot):
-    dotNum = 3
-    t_s = dots[numDot].time
-    y_s = [dots[numDot].y[0],dots[numDot].y[1],dots[numDot].y[2],dots[numDot].y[3]]
+def sy(numDot,a):
+    dotNum = max(a,4)
+    t_s = dots[numDot].time[-4:]
+    y_s = [dots[numDot].y[dotNum-4],dots[numDot].y[dotNum-3],dots[numDot].y[dotNum-2],dots[numDot].y[dotNum-1]]
     y_tck = CubicSpline(t_s,y_s)
     #print(y_tck(0))
     return y_tck
 
-def ds(numDot,arg,dx):
-    tck = CubicSpline(dots[numDot].x,dots[numDot].y)
-    return tck(arg,dx)
 #Скорости? ускорения?
 #двоичный поиск
 #гравитационные силы
 
 
 for a in range(n):
-    stx = [-0.03+n/2, -0.02+n/3, -0.01+n/5 ,0]
-    sty = [0.03+n/2, 0.02+n/3, -0.01+n/5 ,0]
+
+    stx = [-4+5*(-1)**n, -3+5*(-1)**n, -2+5*(-1)**n ,-1+5*(-1)**n]
+    sty = [3+n, 2+n, 1+n ,n]
     dot_new = dot(stx,sty)
     dots.append(dot_new)
-    dots[a].seg_x.append(sx(a))
-    dots[a].seg_y.append(sy(a))
-
-
-ts = [dt  * i for i in  range (0,500)]
-for i in ts:
+    for i in range(0,4):
+        dots[a].seg_x.append(sx(a,0))
+        dots[a].seg_y.append(sy(a,0))
+#print('bin s ',binSearch(0,1,dt))
+#print('acc ',acc(1,3*dt))
+for i in range (3,500):
+    t = dt * i
     for j in range(n):
-        layer.create_oval(sx(j)(i)+xc, sy(j)(i)+yc, sx(j)(i)+xc, sy(j)(i)+yc, width=1) #траектория
-        layer.moveto(dots[j].ball, sx(j)(i)-7+xc,sy(j)(i)+yc-7)
-        # add X Y in memory
-        #if ((j+1)*i - int((j+1)*i)) == 0:
-        #  dots[j].y.append(round(int(s(j,i)),3))
-        #  dots[j].x.append((j+1)*i)
+        x1,y1=VerletInt(j,t)
+        dots[j].x.append(x1)
+        dots[j].y.append(y1)
+        dots[j].time.append(t+dt)
+        dots[j].seg_x.append(sx(j,i))
+        dots[j].seg_y.append(sy(j,i))
+        layer.moveto(dots[j].ball, 5*x1-7+xc,5*y1+yc-7)
+        layer.create_oval(5*x1 + xc, 5*y1 + yc, 5*x1 + xc, 5*y1 + yc, width=1)  # траектория
     wind.update()
     time.sleep(0.001)
 
-def ert(numDot):
-    dotNum = 3
-    x_s = [dots[numDot].x[dotNum-3],dots[numDot].x[dotNum-2],dots[numDot].x[dotNum-1]]
-    y_s = [dots[numDot].y[0],dots[numDot].y[1],dots[numDot].y[2]]
-    tck = CubicSpline(x_s,y_s)
-    #print(tck(0))
-    return tck
-fig, ax = plt.subplots()
+#fig, ax = plt.subplots()
 #ax.plot(ts, ert(0)(ts), label='sc')
-ax.plot(dots[0].x, dots[0].y, 'o', label='data')
-ax.plot(ts, sx(0)(ts))
-ax.plot(ts, sy(0)(sx(0)(ts)))
-plt.show()
+#ax.plot(dots[0].x, dots[0].y, 'o', label='data')
+#ax.plot(ts, sx(0)(ts))
+#ax.plot(ts, sy(0)(ts))
+#plt.show()
 #print(dots[n-1].x)
 #print(dots[n-1].y)
 #print("end")
