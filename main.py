@@ -2,90 +2,164 @@ from scipy.interpolate import CubicSpline
 import time
 from tkinter import *
 import math
+from math import pi, cos, sin
+from random import random
 import numpy as np
 import matplotlib.pyplot as plt
-from sympy.solvers import solve
-from sympy import Symbol
-
-dt = 0.1
-G = 6.67*10**(-11)
-c = 3*10**2
+c = 3*10**6
+r = 0.05
+th = 2*r/c
+dt = 0.001
+j = int(math.ceil(th/dt))
+h =max(j,4) #шаги
+km = 350
+G = 6.67*10**(-7)
 xc = 600
 yc = 300
-n = 3
-dots = []
+n = 6
 t = 0
 
 wind = Tk()
 layer = Canvas(wind, width=2*xc, height=2*yc)
 layer.pack()
-layer.create_line(6, 0, 6, 2*yc, width=1)
-layer.create_line(0, yc, 2*xc, yc, width=1)
-layer.create_oval( 3, yc - 3, 9, yc + 3, fill='red', width=0)
+def click1():
+    global km, in_km
+    if km > 51:km -= 50
+    layer.delete(in_km)
+    in_km = layer.create_text(50, 50, text='Km = ' + str(km))
+def click2():
+    global km, mash
+    km += 50
+    layer.delete(mash)
+    mash = layer.create_text(50, 50, text='Km = ' + str(km))
+def click3():
+    global dt, in_dt
+    dt /= 2
+    layer.delete(in_dt)
+    in_dt = layer.create_text(50, 25, text='dt = ' + str(dt))
+def click4():
+    global dt, in_dt
+    dt *= 2
+    layer.delete(in_dt)
+    in_dt = layer.create_text(50, 25, text='dt = ' + str(dt))
+def click5():
+    global dt, in_dt
+    dt += 0.0001
+    layer.delete(in_dt)
+    in_dt = layer.create_text(50, 25, text='dt = ' + str(dt))
+def click6():
+    global dt, in_dt
+    dt -= 0.0001
+    layer.delete(in_dt)
+    in_dt = layer.create_text(50, 25, text='dt = ' + str(dt))
+btn1 = Button(wind, text=' km -= 50 ', command=click1)
+btn2 = Button(wind, text=' km += 50 ', command=click2)
+btn3 = Button(wind, text=' dt /= 2 ', command=click3)
+btn4 = Button(wind, text=' dt *= 2 ', command=click4)
+btn5 = Button(wind, text=' dt += 0.0001 ', command=click5)
+btn6 = Button(wind, text=' dt -= 0.0001 ', command=click6)
+btn1.pack(side=LEFT)
+btn2.pack(side=LEFT)
+btn3.pack(side=RIGHT)
+btn4.pack(side=RIGHT)
+btn5.pack(side=RIGHT)
+btn6.pack(side=RIGHT)
 
-class vec:
-    def __init__(self,x,y):
-        self.x = x
-        self.y = y
+class line:
+    def __init__(self,t0,t1,x_0,x_1):
+        self.t0 = t0
+        self.x0 = x_0
+        self.k = (x_1-x_0)/(t1-t0)
+    def __call__(self, t):
+        return self.x0+self.k*(t-self.t0)
 
-    def __add__(self, other):
-        return vec(self.x + other.x, self.y + other.y)
-
-
-    def __sub__(self, other):
-        return vec(self.x - other.x, self.y - other.y)
-
-    def __abs__(self):
-        return math.hypot(self.x, self.y)
-
+#Создание класса объекта материальной точки со всеми свойствами
 
 class dot:
-    def __init__(self,x,y):
+    def __init__(self):
         self.ball = layer.create_oval( 3, yc - 6, 15, yc + 6, fill='blue', width=0)
-        self.m = 100
-        self.time = [0, dt, 2*dt, 3*dt]
-        self.x = x
-        self.y = y
+        self.m = 20000.0
+        self.x = []
+        self.y = []
         self.seg_x = []
         self.seg_y = []
 
-
+#Поиск момента времени, в который точка 1 видит точку 2 с учетом ограничения скорости гравитации методом двоичного поиска
 def binSearch(numDot1, numDot2, t):
+    #t = round(t,4)
+    count = 0
     delt=t
     l = -1
     i = int(t/dt)
     while round(c*delt,2) != round(l,2):
-        b =  int((t-delt)/dt)
-        sgx = dots[numDot2].seg_x[b](t-delt)
-        sgy = dots[numDot2].seg_y[b](t-delt)
+        tau = t - delt
+        j = int(tau/dt)
+        sgx = dots[numDot2].seg_x[j](tau)
+        sgy = dots[numDot2].seg_y[j](tau)
         x02=(dots[numDot1].x[i]- sgx)**2
         y02=(dots[numDot1].y[i]- sgy)**2
         l = math.sqrt(x02 + y02)
         if c*delt > l:
             delt -= delt / 2
-        elif c*delt < l:
+        else:
             delt += delt / 2
        # print('c*dt ',delt*c)
-       #print('l ',l)
+       # print('l ',l)
+        count +=1
+    #print(count)
     return delt
+#Поиск момента времени, в который точка 1 видит точку 2 с учетом ограничения скорости гравитации методом хорд
+def timeSearch(numDot1, numDot2, t):
+    tleft = 0
+    tright = t-0.0001*dt
+    i = int(t/dt)
+    xi = dots[numDot1].x[i]
+    yi = dots[numDot1].y[i]
+    def compute_l(tau):
+        j = int(tau/dt)
+        #print(j,len(dots[numDot2].seg_x))
 
-
+        dx = dots[numDot2].seg_x[j](tau) - xi
+        dy = dots[numDot2].seg_y[j](tau) - yi
+        return c*(t - tau) - math.sqrt(dx*dx + dy*dy)
+    fleft = compute_l(tleft)
+    fright = compute_l(tright)
+    #count = 0
+    tmid = 0.5*(tleft + tright)
+    while math.fabs(tleft - tright) > 1e-6:
+        tmid = (fleft*tright - fright*tleft) / (fleft - fright)
+        if (tmid - tleft ) < 1e-7 or (tright - tmid) < 1e-7:
+            tmid = 0.5*(tleft + tright)
+        fmid = compute_l(tmid)
+        if fleft*fmid < 0:
+            tright = tmid
+            fright = fmid
+        else:
+            tleft = tmid
+            fleft = fmid
+        #count += 1
+    #print(count)
+    return tmid
+#Находим ускорение точки в момент времени t
 def acc(n1,t):
     a_x = 0
     a_y = 0
     j = int(t/dt)
-    for i in range(n):
-        if i != n1:
-            t0 = t - binSearch(n1,i,t)
+    for dotn in range(n):
+        if dotn != n1:
+            t0 = t - timeSearch(n1,dotn,t)
             b = int(t0/dt)
             #print(t0)
-            r3 = (math.sqrt((dots[i].seg_x[b](t0) - dots[n1].x[j])**2+(dots[i].seg_y[b](t0) - dots[n1].y[j])**2)**3)
-            a_x += (dots[i].m * (dots[i].seg_x[b](t0) - dots[n1].x[j]))/r3
-            a_y += (dots[i].m * (dots[i].seg_y[b](t0) - dots[n1].y[j]))/r3
+            r3 = (math.sqrt((dots[dotn].seg_x[b](t0) - dots[n1].x[j])**2+
+                            (dots[dotn].seg_y[b](t0) - dots[n1].y[j])**2)**3)
+            #print(r3,n1,dotn, t-t0)
+            r3 = max(r3,1e-7)
+            a_x += (dots[dotn].m * (dots[dotn].seg_x[b](t0) - dots[n1].x[j]))/r3
+            a_y += (dots[dotn].m * (dots[dotn].seg_y[b](t0) - dots[n1].y[j]))/r3
 
     return G * a_x,G * a_y
 
-
+#Находим координаты точки в следующий момент времени используя метод Верле
 def VerletInt(numDot,t): #xn+1 = 2xn - xn-1 +an*dt^2
     i = int(t/dt)
     Wx,Wy = acc(numDot,t)
@@ -109,44 +183,37 @@ def sy(numDot,a):
     y_tck = CubicSpline(t_s,y_s)
     #print(y_tck(0))
     return y_tck
+def velocity(x0,x1):
+    return  (x1 - x0)/dt
 
-#Скорости? ускорения?
-#двоичный поиск
-#гравитационные силы
-
-
+#Создаем материальные точки
+dots=[]
+layer.create_line(6, 0, 6, 2*yc, width=1)
+layer.create_line(0, yc, 2*xc, yc, width=1)
+layer.create_oval( 3, yc - 3, 9, yc + 3, fill='red', width=0)
 for a in range(n):
-
-    stx = [-4+5*(-1)**n, -3+5*(-1)**n, -2+5*(-1)**n ,-1+5*(-1)**n]
-    sty = [3+n, 2+n, 1+n ,n]
-    dot_new = dot(stx,sty)
+    dot_new = dot()
     dots.append(dot_new)
-    for i in range(0,4):
-        dots[a].seg_x.append(sx(a,0))
-        dots[a].seg_y.append(sy(a,0))
-#print('bin s ',binSearch(0,1,dt))
-#print('acc ',acc(1,3*dt))
-for i in range (3,500):
+    for b in range(h):
+        t = b * dt
+        arc = t + a
+        dot_new.x.append(r*cos(arc))
+        dot_new.y.append(r*sin(arc))
+        if b > 0:
+            dot_new.seg_y.append(line(t-dt, t, dot_new.y[b-1], dot_new.y[b]))
+            dot_new.seg_x.append(line(t-dt, t, dot_new.x[b-1], dot_new.x[b]))
+in_km = layer.create_text(50,50,text='Km = ' + str(km))
+in_dt = layer.create_text(50,25,text='dt = ' + str(dt))
+for i in range (h-1,5000): #i шаг, t текущее время
     t = dt * i
     for j in range(n):
         x1,y1=VerletInt(j,t)
         dots[j].x.append(x1)
         dots[j].y.append(y1)
-        dots[j].time.append(t+dt)
-        dots[j].seg_x.append(sx(j,i))
-        dots[j].seg_y.append(sy(j,i))
-        layer.moveto(dots[j].ball, 5*x1-7+xc,5*y1+yc-7)
-        layer.create_oval(5*x1 + xc, 5*y1 + yc, 5*x1 + xc, 5*y1 + yc, width=1)  # траектория
+        dots[j].seg_x.append(line(t,t+dt,dots[j].x[i],x1))
+        dots[j].seg_y.append(line(t,t+dt,dots[j].y[i],y1))
+        #print(math.hypot(velocity(dots[j].x[i-1],x1),velocity(dots[j].y[i - 1], y1)))
+        layer.moveto(dots[j].ball, 5*x1*km-7+xc,5*y1*km+yc-7)
+        layer.create_oval(5*x1*km + xc, 5*y1*km + yc, 5*x1*km + xc, 5*y1*km + yc, width=1)  # траектория
     wind.update()
-    time.sleep(0.001)
-
-#fig, ax = plt.subplots()
-#ax.plot(ts, ert(0)(ts), label='sc')
-#ax.plot(dots[0].x, dots[0].y, 'o', label='data')
-#ax.plot(ts, sx(0)(ts))
-#ax.plot(ts, sy(0)(ts))
-#plt.show()
-#print(dots[n-1].x)
-#print(dots[n-1].y)
-#print("end")
 wind.mainloop()
